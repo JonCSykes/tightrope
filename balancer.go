@@ -3,6 +3,7 @@ package tightrope
 import (
 	"container/heap"
 	"fmt"
+	"time"
 )
 
 type Balancer struct {
@@ -10,59 +11,59 @@ type Balancer struct {
 	done chan *Worker
 }
 
-const nRequester = 100
-const nWorker = 10
+func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer {
+	done := make(chan *Worker, workerCount)
 
-func InitBalancer() *Balancer {
-	done := make(chan *Worker, nWorker)
+	balancer := &Balancer{make(Pool, 0, workerCount), done}
 
-	balancer := &Balancer{make(Pool, 0, nWorker), done}
-
-	for i := 0; i < nWorker; i++ {
-		worker := &Worker{work: make(chan Request, nRequester)}
+	for i := 0; i < workerCount; i++ {
+		worker := &Worker{Work: make(chan Request, maxWorkBuffer)}
 		heap.Push(&balancer.pool, worker)
-		go worker.Execute(balancer.done)
+		go execute(worker, balancer.done)
 	}
 
 	return balancer
 }
 
-func (b *Balancer) print() {
+func (b *Balancer) Print() {
 	sum := 0
 	sumsq := 0
+	totalCompleted := 0
 
 	for _, w := range b.pool {
-		fmt.Printf("%d ", w.pending)
-		sum += w.pending
-		sumsq += w.pending * w.pending
+		fmt.Printf("wid: %d, pnd: %d, cmplt: %d | ", w.Index, w.Pending, w.Complete)
+		sum += w.Pending
+		sumsq += w.Pending * w.Pending
+		totalCompleted += w.Complete
 	}
 
 	avg := float64(sum) / float64(len(b.pool))
 	variance := float64(sumsq)/float64(len(b.pool)) - avg*avg
-	fmt.Printf(" %.2f %.2f\n", avg, variance)
+	fmt.Printf(" avg: %.2f, var: %.2f, ttl cmplt: %d, ts: %s\n", avg, variance, totalCompleted, time.Now().Format("15:04:05.999999"))
 }
 
-func (b *Balancer) balance(req chan Request) {
+func (b *Balancer) Balance(req chan Request) {
 	for {
 		select {
 		case request := <-req:
-			b.dispatch(request)
+			b.Dispatch(request)
 		case w := <-b.done:
-			b.completed(w)
+			b.Completed(w)
 		}
-		b.print()
+		b.Print()
 	}
 }
 
-func (b *Balancer) dispatch(req Request) {
+func (b *Balancer) Dispatch(req Request) {
 	w := heap.Pop(&b.pool).(*Worker)
-	w.work <- req
-	w.pending++
+	w.Work <- req
+	w.Pending++
 	heap.Push(&b.pool, w)
 }
 
-func (b *Balancer) completed(w *Worker) {
-	w.pending--
-	heap.Remove(&b.pool, w.index)
+func (b *Balancer) Completed(w *Worker) {
+	w.Pending--
+	w.Complete++
+	heap.Remove(&b.pool, w.Index)
 	heap.Push(&b.pool, w)
 }
