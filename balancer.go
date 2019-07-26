@@ -7,14 +7,16 @@ import (
 )
 
 type Balancer struct {
-	pool Pool
-	done chan *Worker
+	pool    Pool
+	timeout chan bool
+	done    chan *Worker
 }
 
 func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer {
 	done := make(chan *Worker, workerCount)
+	timeout := make(chan bool)
 
-	balancer := &Balancer{make(Pool, 0, workerCount), done}
+	balancer := &Balancer{make(Pool, 0, workerCount), timeout, done}
 
 	for i := 0; i < workerCount; i++ {
 		worker := &Worker{Work: make(chan Request, maxWorkBuffer)}
@@ -23,6 +25,13 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer
 	}
 
 	return balancer
+}
+
+// TimeOut :
+func TimeOut(timeoutDuration time.Duration, timeout chan<- bool) {
+	time.Sleep(timeoutDuration)
+	fmt.Println("Time Out!")
+	timeout <- true
 }
 
 func (b *Balancer) Print() {
@@ -42,15 +51,22 @@ func (b *Balancer) Print() {
 	fmt.Printf(" avg: %.2f, var: %.2f, ttl cmplt: %d, ts: %s\n", avg, variance, totalCompleted, time.Now().Format("15:04:05.999999"))
 }
 
-func (b *Balancer) Balance(req chan Request) {
+func (b *Balancer) Balance(req chan Request, printStats bool, timeoutDuration time.Duration) {
+
+	go TimeOut(timeoutDuration, b.timeout)
+
 	for {
 		select {
 		case request := <-req:
 			b.Dispatch(request)
 		case w := <-b.done:
 			b.Completed(w)
+		case <-b.timeout:
+			return
 		}
-		b.Print()
+		if printStats {
+			b.Print()
+		}
 	}
 }
 

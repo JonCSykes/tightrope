@@ -8,7 +8,7 @@ import (
 	"github.com/joncsykes/tightrope"
 )
 
-const maxWorkBuffer = 120
+const maxWorkBuffer = 2000
 const workerCount = 10
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 
 	go CreateWork(work)
 
-	tightrope.InitBalancer(workerCount, maxWorkBuffer, Execute).Balance(work)
+	tightrope.InitBalancer(workerCount, maxWorkBuffer, Execute).Balance(work, false, time.Duration(30)*time.Second)
 }
 
 func CreateWork(request chan tightrope.Request) {
@@ -29,10 +29,13 @@ func CreateWork(request chan tightrope.Request) {
 }
 
 func Execute(worker *tightrope.Worker, done chan *tightrope.Worker) {
+
 	for {
+
 		request := <-worker.Work
 		request.Response <- math.Sin(float64(request.Data.(int)))
-		time.Sleep(time.Duration(rand.Int63n(int64(time.Second * 10))))
+
+		time.Sleep(time.Duration(rand.Int63n(int64(time.Second * 1))))
 		done <- worker
 	}
 }
