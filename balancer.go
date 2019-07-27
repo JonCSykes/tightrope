@@ -30,7 +30,6 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer
 // TimeOut :
 func TimeOut(timeoutDuration time.Duration, timeout chan<- bool) {
 	time.Sleep(timeoutDuration)
-	fmt.Println("Time Out!")
 	timeout <- true
 }
 
