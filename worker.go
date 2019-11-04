@@ -11,5 +11,3 @@ type Worker struct {
 }
 
 type Execute func(*Worker, chan *Worker, *sync.WaitGroup)
-
-//type Execute func(*Worker, chan *Worker)

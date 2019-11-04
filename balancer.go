@@ -24,8 +24,7 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute, wg *sync.
 		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, Closed: make(chan bool)}
 		heap.Push(&balancer.pool, worker)
 		go execute(worker, balancer.done, wg)
-		//go execute(worker, balancer.done)
-		fmt.Println("worker is ", worker)
+
 	}
 	return balancer
 }
