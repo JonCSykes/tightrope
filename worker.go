@@ -8,4 +8,4 @@ type Worker struct {
 	Closed   chan bool
 }
 
-type Execute func(*Worker, chan *Worker)
+type Execute func(request Request)
