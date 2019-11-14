@@ -1,7 +1,5 @@
 package tightrope
 
-import "sync"
-
 type Worker struct {
 	Index    int
 	Work     chan Request
@@ -10,4 +8,4 @@ type Worker struct {
 	Closed   chan bool
 }
 
-type Execute func(*Worker, chan *Worker, *sync.WaitGroup)
+type Execute func(*Worker, chan *Worker)
