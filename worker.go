@@ -5,7 +5,7 @@ type Worker struct {
 	Work     chan Request
 	Pending  int
 	Complete int
-	Closed   chan bool
+	Closed   chan int
 }
 
 type Execute func(request Request)

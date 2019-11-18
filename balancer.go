@@ -25,17 +25,21 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute, wg *sync.
 
 	for i := 0; i < workerCount; i++ {
 
-		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, Closed: make(chan bool)}
+		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, Closed: make(chan int)}
 		heap.Push(&balancer.pool, worker)
-		go func() {
-			select {
-			case request := <-worker.Work:
-				execute(request)
-				done <- worker
-			case <-worker.Closed:
-				return
+
+		go func(w *Worker) {
+			for {
+				select {
+				case request := <-w.Work:
+					execute(request)
+					done <- worker
+				case <-w.Closed:
+					fmt.Println("Closing after timeout:", w.Index)
+					return
+				}
 			}
-		}()
+		}(worker)
 	}
 	return balancer
 }
@@ -67,30 +71,36 @@ func (b *Balancer) Print() {
 func (b *Balancer) Balance(req chan Request, printStats bool, timeoutDuration time.Duration) {
 
 	go TimeOut(timeoutDuration, b.timeout)
-
-	for {
-		select {
-		case request := <-req:
-			b.Dispatch(request)
-		case w := <-b.done:
-			b.Completed(w)
-		case <-b.timeout:
-			for b.pool.Len() != 0 {
-				w := heap.Pop(&b.pool).(*Worker)
-				w.Closed <- true
-				b.waitGroup.Done()
+	isClosed := make(chan bool)
+	go func() {
+		for {
+			select {
+			case request := <-req:
+				b.Dispatch(request)
+			case w := <-b.done:
+				b.Completed(w)
+			case <-b.timeout:
+				fmt.Println("Timeout :::::::::::::::")
+				isClosed <- true
+				return
 			}
-			return
-		}
 
-		if printStats {
-			b.Print()
-		}
+			if printStats {
+				b.Print()
+			}
 
-		// if b.workerCount == b.finishedWorkerCount {
-		// 	fmt.Println("Leaving Balancer - " + strconv.Itoa(len(b.pool)) + ":" + strconv.Itoa(b.finishedWorkerCount))
-		// 	return
-		// }
+			// if b.workerCount == b.finishedWorkerCount {
+			// 	fmt.Println("Leaving Balancer - " + strconv.Itoa(len(b.pool)) + ":" + strconv.Itoa(b.finishedWorkerCount))
+			// 	return
+			// }
+		}
+	}()
+	<-isClosed
+	for _, w := range b.pool {
+		fmt.Println("Removing worker:", *w)
+		w.Closed <- 1
+		b.waitGroup.Done()
+		fmt.Println("waitGroup is done:", w)
 	}
 }
 
@@ -102,10 +112,11 @@ func (b *Balancer) Dispatch(req Request) {
 }
 
 func (b *Balancer) Completed(w *Worker) {
-	index := w.Index
 	w.Pending--
 	w.Complete++
-	heap.Remove(&b.pool, index)
+	heap.Remove(&b.pool, w.Index)
+	heap.Push(&b.pool, w)
+	//fmt.Println("worker is added back", w.Index)
 
 	// if b.isTimedOut {
 	// 	fmt.Println("Closing worker " + strconv.Itoa(index) + " of " + strconv.Itoa(len(b.pool)))
@@ -120,12 +131,4 @@ func (b *Balancer) Completed(w *Worker) {
 	// 	fmt.Println("Putting Worker back on heap " + strconv.Itoa(index))
 	// 	heap.Push(&b.pool, w)
 	// }
-}
-
-func (b *Balancer) Purge(i int) {
-
-	heap.Remove(&b.pool, i)
-	b.pool[i].Closed <- true
-	close(b.pool[i].Work)
-	b.waitGroup.Done()
 }
