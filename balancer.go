@@ -3,7 +3,6 @@ package tightrope
 import (
 	"container/heap"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -14,7 +13,7 @@ type Balancer struct {
 }
 
 //func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer {
-func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute, wg *sync.WaitGroup) *Balancer {
+func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer {
 	done := make(chan *Worker, workerCount)
 	timeout := make(chan bool)
 	balancer := &Balancer{make(Pool, 0, workerCount), timeout, done}
@@ -23,7 +22,7 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute, wg *sync.
 
 		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, Closed: make(chan bool)}
 		heap.Push(&balancer.pool, worker)
-		go execute(worker, balancer.done, wg)
+		go execute(worker, balancer.done)
 
 	}
 	return balancer
