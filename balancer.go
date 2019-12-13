@@ -63,7 +63,7 @@ func (b *Balancer) Balance(req chan Request, printStats bool, timeoutDuration ti
 		case w := <-b.done:
 			b.Completed(w)
 		case <-b.timeout:
-			b.Purge()
+			//b.Purge()
 			return
 		}
 		if printStats {
