@@ -22,8 +22,17 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer
 
 		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, Closed: make(chan bool)}
 		heap.Push(&balancer.pool, worker)
-		go execute(worker, balancer.done)
+		go func(worker *Worker, done chan *Worker) {
+			for {
+				request := <-worker.Work
+				if (Request{} == request) {
+					return
+				}
+				execute(request)
+				done <- worker
+			}
 
+		}(worker, balancer.done)
 	}
 	return balancer
 }
@@ -63,7 +72,7 @@ func (b *Balancer) Balance(req chan Request, printStats bool, timeoutDuration ti
 		case w := <-b.done:
 			b.Completed(w)
 		case <-b.timeout:
-			//b.Purge()
+			b.Purge()
 			return
 		}
 		if printStats {
@@ -90,7 +99,7 @@ func (b *Balancer) Purge() {
 
 	for b.pool.Len() != 0 {
 		w := heap.Pop(&b.pool).(*Worker)
-		w.Closed <- true
+		w.Work <- Request{}
 		close(w.Work)
 	}
 }
