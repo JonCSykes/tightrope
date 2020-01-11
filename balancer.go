@@ -7,29 +7,43 @@ import (
 )
 
 type Balancer struct {
-	pool    Pool
-	timeout chan bool
-	done    chan *Worker
+	pool            Pool
+	timeout         chan bool
+	done            chan *Worker
+	shutdown        chan bool
+	finishedWorkers chan int
+	workerCount     int
 }
 
 //func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer {
 func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer {
 	done := make(chan *Worker, workerCount)
+	finishedWorkers := make(chan int, workerCount)
 	timeout := make(chan bool)
-	balancer := &Balancer{make(Pool, 0, workerCount), timeout, done}
+	shutdown := make(chan bool)
+	balancer := &Balancer{make(Pool, 0, workerCount), timeout, done, shutdown, finishedWorkers, workerCount}
 
 	for i := 0; i < workerCount; i++ {
 
-		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, Closed: make(chan bool)}
+		worker := &Worker{Work: make(chan Request, maxWorkBuffer), Index: i, WorkerID: i, CloseGracefully: make(chan bool)}
 		heap.Push(&balancer.pool, worker)
 		go func(worker *Worker, done chan *Worker) {
 			for {
-				request := <-worker.Work
-				if (Request{} == request) {
-					return
+				select {
+				case <-worker.CloseGracefully:
+					fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Close Recieved for Worker :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: ", worker.WorkerID)
+					emptyRequest := Request{Data: nil}
+					worker.Work <- emptyRequest
+				case request := <-worker.Work:
+					if request.Data == nil {
+						balancer.finishedWorkers <- 0
+						fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Exiting Worker :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: ", worker.WorkerID)
+						close(worker.Work)
+						return
+					}
+					execute(request)
+					done <- worker
 				}
-				execute(request)
-				done <- worker
 			}
 
 		}(worker, balancer.done)
@@ -50,6 +64,7 @@ func (b *Balancer) Print() {
 
 	for _, w := range b.pool {
 		fmt.Printf("wid: %d, pnd: %d, cmplt: %d | ", w.Index, w.Pending, w.Complete)
+
 		sum += w.Pending
 		sumsq += w.Pending * w.Pending
 		totalCompleted += w.Complete
@@ -62,22 +77,38 @@ func (b *Balancer) Print() {
 }
 
 func (b *Balancer) Balance(req chan Request, printStats bool, timeoutDuration time.Duration) {
-
 	go TimeOut(timeoutDuration, b.timeout)
+	finishedWorkersCount := 0
+	go func() {
+		for {
+			select {
+			case request := <-req:
+				b.Dispatch(request)
+			case w := <-b.done:
+				b.Completed(w)
+			case <-b.timeout:
+				b.StopAllWorkersGraceFully()
+			case <-b.finishedWorkers:
+				finishedWorkersCount++
+			}
+			if finishedWorkersCount == b.workerCount {
+				fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Closing from StopAllWorkersGraceFully  :::::::::::::::::::::::::::::::::::::")
+				b.shutdown <- true
+				close(b.shutdown)
+				return
+			}
+			if printStats {
+				b.Print()
+			}
+		}
+	}()
+	<-b.shutdown
+}
 
-	for {
-		select {
-		case request := <-req:
-			b.Dispatch(request)
-		case w := <-b.done:
-			b.Completed(w)
-		case <-b.timeout:
-			b.Purge()
-			return
-		}
-		if printStats {
-			b.Print()
-		}
+func (b *Balancer) StopAllWorkersGraceFully() {
+	for i := 0; i < b.pool.Len(); i++ {
+		worker := b.pool[i]
+		worker.CloseGracefully <- true
 	}
 }
 

@@ -1,11 +1,12 @@
 package tightrope
 
 type Worker struct {
-	Index    int
-	Work     chan Request
-	Pending  int
-	Complete int
-	Closed   chan bool
+	Index           int
+	WorkerID        int
+	Work            chan Request
+	Pending         int
+	Complete        int
+	CloseGracefully chan bool
 }
 
-type Execute func(interface{})
+type Execute func(Request)
