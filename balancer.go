@@ -31,16 +31,13 @@ func InitBalancer(workerCount int, maxWorkBuffer int, execute Execute) *Balancer
 			for {
 				select {
 				case request := <-worker.Work:
-					// fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Job Started :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: ", worker.WorkerID)
 					if request.Data == nil {
 						balancer.finishedWorkers <- 0
-						fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Exiting Worker :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: ", worker.WorkerID)
 						close(worker.Work)
 						return
 					}
 					execute(request)
 					done <- worker
-					// fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Job Finished :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: ", worker.WorkerID)
 				}
 			}
 
@@ -85,15 +82,11 @@ func (b *Balancer) Balance(req chan Request, printStats bool, timeoutDuration ti
 			case w := <-b.done:
 				b.Completed(w)
 			case <-b.timeout:
-				// fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Timeout :::::::::::::::::::::::::::::::::::::")
 				b.StopAllWorkersGraceFully()
-				// fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: StopAllWorkersGraceFully finished:::::::::::::::::::::::::::::::::::::")
 			case <-b.finishedWorkers:
 				finishedWorkersCount++
 			}
-			// fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: finishedWorkersCount :::::::::::::::::::::::::::::::::::::", finishedWorkersCount)
 			if finishedWorkersCount == b.workerCount {
-				fmt.Println(":::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: Closing from StopAllWorkersGraceFully  :::::::::::::::::::::::::::::::::::::")
 				b.shutdown <- true
 				close(b.shutdown)
 				return
