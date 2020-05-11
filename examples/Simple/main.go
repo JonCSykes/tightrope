@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"time"
@@ -28,14 +29,8 @@ func CreateWork(request chan tightrope.Request) {
 	}
 }
 
-func Execute(worker *tightrope.Worker, done chan *tightrope.Worker) {
-
-	for {
-
-		request := <-worker.Work
-		request.Response <- math.Sin(float64(request.Data.(int)))
-
-		time.Sleep(time.Duration(rand.Int63n(int64(time.Second * 1))))
-		done <- worker
-	}
+func Execute(request tightrope.Request) {
+	request.Response <- math.Sin(float64(request.Data.(int)))
+	fmt.Println(request.Data.(int), math.Sin(float64(request.Data.(int))))
+	time.Sleep(time.Duration(rand.Int63n(int64(time.Second * 1))))
 }
