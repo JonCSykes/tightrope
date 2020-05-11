@@ -108,6 +108,7 @@ func (b *Balancer) StopAllWorkersGraceFully() {
 }
 
 func (b *Balancer) Dispatch(req Request) {
+	defer handlePanic()
 	w := heap.Pop(&b.pool).(*Worker)
 	w.Work <- req
 	w.Pending++
@@ -127,5 +128,11 @@ func (b *Balancer) Purge() {
 		w := heap.Pop(&b.pool).(*Worker)
 		w.Work <- Request{}
 		close(w.Work)
+	}
+}
+
+func handlePanic() {
+	if r := recover(); r != nil {
+		fmt.Println(r)
 	}
 }
